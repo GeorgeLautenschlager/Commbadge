@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Combadge</string>
+    <string name="standing_by">Standing by</string>
+    <string name="listening">Listening…</string>
+    <string name="hailing">Hailing %s…</string>
+    <string name="channel_open">Channel open — %s</string>
+    <string name="unable_to_locate">Unable to locate %s. Not on sensors.</string>
+    <string name="crew_members_on_sensors">%d crew member(s) on sensors</string>
+    <string name="crew_name_prompt">Enter your crew name</string>
+    <string name="crew_name_hint">e.g. Geordi, Number One, Counselor</string>
+    <string name="confirm">Engage</string>
+    <string name="settings_title">Crew Settings</string>
+    <string name="my_crew_name">My Crew Name</string>
+    <string name="my_aliases">Aliases (comma-separated)</string>
+    <string name="chirp_volume">Chirp Volume</string>
+    <string name="haptic_feedback">Haptic Feedback</string>
+    <string name="auto_accept_hails">Auto-accept Hails</string>
+    <string name="wifi_required">Combadge requires local network. Connect to a Wi-Fi network.</string>
+    <string name="incoming_hail">Incoming hail from %s</string>
+    <string name="channel_notification_title">Voice Channel Active</string>
+    <string name="channel_notification_text">Connected to %s</string>
+    <string name="multiple_matches">Multiple matches found</string>
+    <string name="incoming_hail_from">Incoming hail — %s</string>
+</resources>
