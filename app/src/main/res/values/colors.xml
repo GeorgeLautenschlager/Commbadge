@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="deep_space">#1A1A2E</color>
+    <color name="lcars_amber">#FF9900</color>
+    <color name="lcars_lavender">#CC99CC</color>
+    <color name="lcars_periwinkle">#9999FF</color>
+    <color name="lcars_alert">#FF3333</color>
+    <color name="lcars_teal">#33CC99</color>
+</resources>
