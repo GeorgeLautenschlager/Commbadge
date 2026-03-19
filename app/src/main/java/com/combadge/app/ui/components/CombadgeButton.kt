@@ -52,7 +52,7 @@ fun CombadgeButton(
                                 isAntiAlias = true
                                 color = android.graphics.Color.TRANSPARENT
                                 setShadowLayer(
-                                    size.width.value * 0.25f,
+                                    this@drawBehind.size.width * 0.25f,
                                     0f, 0f,
                                     android.graphics.Color.argb(
                                         (glowAlpha * 200).toInt(),
