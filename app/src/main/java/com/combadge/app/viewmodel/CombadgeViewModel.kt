@@ -2,13 +2,17 @@ package com.combadge.app.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
+import android.speech.tts.TextToSpeech
 import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.combadge.app.VoiceChannelService
 import com.combadge.app.audio.SoundManager
 import com.combadge.app.audio.VoiceStreamManager
 import com.combadge.app.model.*
@@ -19,6 +23,7 @@ import com.combadge.app.util.PrefsStore
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import java.net.InetAddress
+import java.util.Locale
 import java.util.UUID
 
 class CombadgeViewModel(application: Application) : AndroidViewModel(application) {
@@ -56,9 +61,36 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
     @Volatile private var activeSessionId: String? = null
     private var activeUdpSocket: UdpAudioSocket? = null
 
+    // Phrase carried from speech result through disambiguation to sendHail
+    private var pendingPhrase: String? = null
+
+    // Text-to-speech for announcing incoming hails
+    private var tts: TextToSpeech? = null
+    private var ttsReady = false
+
     init {
         observePreferences()
         setupSignalingServer()
+        initTts()
+    }
+
+    // ------------------------------------------------------------------ //
+    // TTS
+    // ------------------------------------------------------------------ //
+
+    private fun initTts() {
+        tts = TextToSpeech(context) { status ->
+            ttsReady = status == TextToSpeech.SUCCESS
+            if (ttsReady) {
+                tts?.language = Locale.US
+                tts?.setSpeechRate(0.9f)
+            }
+        }
+    }
+
+    private fun speak(text: String) {
+        if (!ttsReady) return
+        tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "combadge_hail")
     }
 
     // ------------------------------------------------------------------ //
@@ -73,6 +105,7 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
                 } else if (name.isNotBlank()) {
                     myName = name
                     restartNsd()
+                    startOnlineService()
                     if (_state.value is CombadgeState.NotRegistered) {
                         _state.value = CombadgeState.Idle
                     }
@@ -119,6 +152,44 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
     }
 
     // ------------------------------------------------------------------ //
+    // Background service
+    // ------------------------------------------------------------------ //
+
+    /** Keeps the process alive so SignalingServer continues to receive hails. */
+    private fun startOnlineService() {
+        val intent = Intent(context, VoiceChannelService::class.java).apply {
+            action = VoiceChannelService.ACTION_START_ONLINE
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not start online service", e)
+        }
+    }
+
+    /** Posts a high-priority incoming-hail notification visible even when app is backgrounded. */
+    private fun notifyIncomingHail(phrase: String, from: String) {
+        val intent = Intent(context, VoiceChannelService::class.java).apply {
+            action = VoiceChannelService.ACTION_INCOMING_HAIL
+            putExtra(VoiceChannelService.EXTRA_PEER_NAME, from)
+            putExtra(VoiceChannelService.EXTRA_PHRASE, phrase)
+        }
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not post hail notification", e)
+        }
+    }
+
+    // ------------------------------------------------------------------ //
     // Signaling server (incoming hails)
     // ------------------------------------------------------------------ //
 
@@ -131,6 +202,10 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
                 .find { it.name.equals(hailMsg.from, ignoreCase = true) }
                 ?: Peer(name = hailMsg.from, ipAddress = "", port = 0)
 
+            // The announcement to speak — fall back to "<name> to <me>" if no phrase sent
+            val announcement = hailMsg.phrase?.takeIf { it.isNotBlank() }
+                ?: "${hailMsg.from} to $myName"
+
             viewModelScope.launch(Dispatchers.Main) {
                 // Cancel any existing session
                 tearDownActiveChannel(silent = true)
@@ -140,6 +215,12 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
 
                 soundManager.playIncomingHail()
                 vibrate(longArrayOf(0, 50, 100, 50))
+
+                // Speak the hail announcement via TTS
+                speak(announcement)
+
+                // Post notification so app surfaces even when backgrounded
+                notifyIncomingHail(announcement, hailMsg.from)
 
                 _state.value = CombadgeState.IncomingHail(
                     peer = peer,
@@ -184,8 +265,10 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
 
     fun onDisambiguationSelect(peer: Peer) {
         if (_state.value !is CombadgeState.Disambiguation) return
+        val phrase = pendingPhrase
+        pendingPhrase = null
         _state.value = CombadgeState.Idle
-        sendHail(peer)
+        sendHail(peer, phrase = phrase)
     }
 
     // ------------------------------------------------------------------ //
@@ -246,8 +329,9 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
                 soundManager.playError()
                 showError("Unable to locate $targetName. Not on sensors.")
             }
-            matches.size == 1 -> sendHail(matches[0])
+            matches.size == 1 -> sendHail(matches[0], phrase = text)
             else -> {
+                pendingPhrase = text
                 soundManager.playDisambiguation()
                 _state.value = CombadgeState.Disambiguation(targetName, matches)
             }
@@ -258,7 +342,7 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
     // Outgoing hail
     // ------------------------------------------------------------------ //
 
-    private fun sendHail(peer: Peer) {
+    private fun sendHail(peer: Peer, phrase: String? = null) {
         if (myName.isBlank()) return
         val sessionId = UUID.randomUUID().toString()
 
@@ -269,7 +353,8 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
             val result = signalingClient.sendHail(
                 peer = peer,
                 from = myName,
-                sessionId = sessionId
+                sessionId = sessionId,
+                phrase = phrase
             )
 
             withContext(Dispatchers.Main) {
@@ -373,6 +458,7 @@ class CombadgeViewModel(application: Application) : AndroidViewModel(application
 
     override fun onCleared() {
         super.onCleared()
+        tts?.shutdown()
         speechManager?.destroy()
         voiceManager.release()
         soundManager.release()

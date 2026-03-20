@@ -118,7 +118,8 @@ class SignalingServer {
                     val msg = HailMessage(
                         sessionId = raw.sessionId,
                         from = raw.from ?: "Unknown",
-                        callerAudioPort = raw.callerAudioPort
+                        callerAudioPort = raw.callerAudioPort,
+                        phrase = raw.phrase
                     )
 
                     // Open a UDP socket to receive the caller's audio on

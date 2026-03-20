@@ -7,7 +7,9 @@ data class HailMessage(
     @SerializedName("sessionId") val sessionId: String,
     @SerializedName("from") val from: String,
     /** UDP port on the CALLER's side where they receive incoming audio */
-    @SerializedName("callerAudioPort") val callerAudioPort: Int = 0
+    @SerializedName("callerAudioPort") val callerAudioPort: Int = 0,
+    /** The raw phrase the caller spoke, e.g. "George to Violet" */
+    @SerializedName("phrase") val phrase: String? = null
 )
 
 data class AcceptMessage(
@@ -28,5 +30,6 @@ data class RawMessage(
     @SerializedName("sessionId") val sessionId: String = "",
     @SerializedName("from") val from: String? = null,
     @SerializedName("audioPort") val audioPort: Int = 0,
-    @SerializedName("callerAudioPort") val callerAudioPort: Int = 0
+    @SerializedName("callerAudioPort") val callerAudioPort: Int = 0,
+    @SerializedName("phrase") val phrase: String? = null
 )
