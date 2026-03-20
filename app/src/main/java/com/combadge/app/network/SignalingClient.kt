@@ -46,7 +46,8 @@ class SignalingClient {
     suspend fun sendHail(
         peer: com.combadge.app.model.Peer,
         from: String,
-        sessionId: String
+        sessionId: String,
+        phrase: String? = null
     ): Pair<AcceptMessage, UdpAudioSocket>? = withContext(Dispatchers.IO) {
         // Open our receiving UDP socket first so we know the port
         val udpSocket = UdpAudioSocket(sessionId)
@@ -63,7 +64,8 @@ class SignalingClient {
             val hailMsg = HailMessage(
                 sessionId = sessionId,
                 from = from,
-                callerAudioPort = udpSocket.localPort
+                callerAudioPort = udpSocket.localPort,
+                phrase = phrase
             )
             w.println(gson.toJson(hailMsg))
             w.flush()
